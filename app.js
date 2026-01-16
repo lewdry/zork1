@@ -1,0 +1,332 @@
+// app.js
+
+const messageArea = document.getElementById('message-area');
+const inputForm = document.getElementById('input-form');
+const commandInput = document.getElementById('command-input');
+const statusTime = document.querySelector('.status-bar .time');
+const statusName = document.querySelector('.header-actions'); // Using for score/moves maybe?
+
+// Update Clock
+function updateClock() {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const formattedTime = `${hours}:${minutes < 10 ? '0' + minutes : minutes}`;
+    if (statusTime) statusTime.textContent = formattedTime;
+}
+setInterval(updateClock, 1000); // Update every second
+updateClock();
+
+let jszm = null;
+let runner = null;
+let textBuffer = "";
+let isWaitingForInput = false;
+let justSaved = false;
+
+// Helper to scroll to bottom
+function scrollToBottom() {
+    messageArea.scrollTop = messageArea.scrollHeight;
+}
+
+// Helper to add a message to the UI
+function addMessage(text, type = 'received') {
+    if (!text.trim()) return;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'bubble';
+    bubbleDiv.textContent = text;
+
+    messageDiv.appendChild(bubbleDiv);
+    messageArea.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+// Flush the accumulated text buffer to the UI
+function flushBuffer() {
+    if (textBuffer) {
+        // Clean up common Z-machine artifacts like the prompt character
+        let text = textBuffer;
+
+        // Remove trailing prompt ">" and any preceding newline
+        text = text.replace(/\n?>\s*$/, '');
+
+        textBuffer = "";
+
+        // Check if we should suppress the "Ok." confirmation from Z-Machine after a save
+        if (justSaved) {
+            justSaved = false;
+            // The machine typically prints "Ok." or "Ok.\n"
+            if (text.trim() === "Ok.") {
+                return; // Suppress output
+            }
+        }
+
+        if (text.trim()) {
+            // Check if this is the initial copyright block
+            // It usually ends with "Serial number XXXXXX" followed by newlines and "West of House"
+            const serialRegex = /(Serial number \d{6})(?:\s*\n)+/;
+            const match = text.match(serialRegex);
+
+            if (match) {
+                // Split into two parts
+                const splitIndex = match.index + match[0].length;
+                const part1 = text.substring(0, splitIndex).trim();
+                const part2 = text.substring(splitIndex).trim();
+
+                // Inject custom messages instead of the original copyright text (part1)
+                addMessage("ZORK I: The Great Underground Empire\nOriginal game © 1981-1986 Infocom, Inc. All rights reserved.\nZORK is a registered trademark of Infocom, Inc.", 'received');
+                addMessage("Source code used under MIT License (Microsoft, 2025).\nUnofficial fan project. Not affiliated with or endorsed by trademark holders.", 'received');
+
+                if (part2) addMessage(part2, 'received');
+            } else {
+                // Normal message
+                addMessage(text, 'received');
+            }
+        }
+    }
+}
+
+// Main Runner Loop
+function runMachine(resumeValue) {
+    if (!runner) return;
+
+    try {
+        let result = runner.next(resumeValue);
+
+        // Loop until we hit a yield that asks for input or done
+        while (!result.done) {
+            if (result.value && result.value.type === 'waitForInput') {
+                // The machine is waiting for input
+                isWaitingForInput = true;
+                flushBuffer(); // Show what we have so far
+                return; // Exit loop, wait for DOM event
+            }
+
+            // If it yielded something else (like null from print), just continue
+            result = runner.next();
+        }
+
+        if (result.done) {
+            flushBuffer();
+            addMessage("--- GAME OVER ---", 'received');
+        }
+
+    } catch (e) {
+        console.error("Z-Machine Error:", e);
+        addMessage("Error: " + e.message, 'received');
+    }
+}
+
+// Handle Form Submit
+inputForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const command = commandInput.value.trim();
+    if (!command) return;
+
+    // Add user message immediately
+    addMessage(command, 'sent');
+    commandInput.value = '';
+
+    // Check for Restart Confirmation
+    if (isWaitingForRestart) {
+        isWaitingForRestart = false;
+        const normalized = command.toLowerCase();
+        if (normalized === 'yes' || normalized === 'y') {
+            addMessage("Restarting...", 'received');
+            localStorage.removeItem('zork1-save');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            addMessage("Game continuing...", 'received');
+            // If the game was waiting for input, it still is.
+        }
+        return;
+    }
+
+    if (isWaitingForInput) {
+        isWaitingForInput = false;
+        // Resume the machine with the input + newline
+        runMachine(command + "\n");
+    } else {
+        // Engine not ready or busy
+        console.warn("Engine not ready for input");
+    }
+});
+
+// Handle Save Button
+document.getElementById('save-btn').addEventListener('click', () => {
+    if (isWaitingForInput && !isWaitingForRestart) {
+        addMessage("save", 'sent'); // Visually show action
+        isWaitingForInput = false;
+        runMachine("save\n");
+    } else {
+        addMessage("Wait for a command prompt to save.", 'received');
+    }
+});
+
+let isWaitingForRestart = false;
+
+// Handle Restart Button
+document.getElementById('restart-btn').addEventListener('click', () => {
+    isWaitingForRestart = true;
+    addMessage("Start a new game? This will clear all progress and your save status. Say yes to begin again.", 'received');
+});
+
+
+// Helper to play a beep sound (Web Audio API)
+function playBeep() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    // "Phone hang up" style beep
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(698.46, audioCtx.currentTime); // 698.46Hz
+
+    // Louder volume (0.3) and longer duration (500ms)
+    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.5);
+}
+
+// Handle Text-to-Speech (Phone Button)
+document.getElementById('tts-btn').addEventListener('click', () => {
+    // Find the latest received message bubble
+    const messages = document.querySelectorAll('.message.received .bubble');
+    if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1].textContent;
+
+        // Cancel any currently speaking text to avoid overlap
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(lastMessage);
+
+        // Optional: formatting for game text
+        // utterance.rate = 0.9; // Slightly slower for dramatic effect?
+        // utterance.pitch = 1.0;
+
+        // Play beep when done
+        utterance.onend = () => {
+            playBeep();
+        };
+
+        window.speechSynthesis.speak(utterance);
+    }
+});
+
+// Update input logic to handle restart confirmation
+const originalSubmitHandler = inputForm.onsubmit; // Not used, just checking scope if needed, but we used addEventListener
+
+// We need to modify the existing submit handler or add a new check
+// Since we can't easily replace the anonymous function in addEventListener,
+// We will rely on modifying the 'isWaitingForInput' check in the existing handler? 
+// Actually, better to refactor the submit handler or use a check inside existing one.
+// The existing handler is anonymous. I will use `replace_file_content` to essentially rewrite/replace the submit handler block.
+
+
+// Initial Setup
+const init = async () => {
+    console.log("Initializing Modern Zork...");
+
+    try {
+        const response = await fetch('zork1.z3');
+        if (!response.ok) throw new Error("Failed to load zork1.z3");
+        const buffer = await response.arrayBuffer();
+
+        jszm = new JSZM(new Uint8Array(buffer));
+
+        // Override JSZM methods
+
+        // Print: Accumulate text
+        jszm.print = function* (text) {
+            // text comes in chunks, often just characters or words
+            textBuffer += text;
+        };
+
+        // Read: Yield a special object to pause the runner
+        jszm.read = function* (maxlen) {
+            return yield { type: 'waitForInput', maxlen };
+        };
+
+        // Status Line: Maybe update header
+        // .updateStatusLine(text, v18, v17)
+        // v18/v17 depend on statusType (score/moves vs time)
+        // Zork 1 is usually Score/Moves.
+        jszm.updateStatusLine = function* (text, left, right) {
+            // text is usually the location name
+            // left/right are numbers (e.g. Score: 0 Moves: 0)
+
+            // We can update the DOM purely as side effect
+            const contactName = document.querySelector('.contact-info .name');
+            const contactStatus = document.querySelector('.contact-info .status');
+
+            if (contactName) {
+                // contactName.textContent = text; // Location Name (Disabled per user request)
+            }
+
+            let statusText = "";
+            if (jszm.statusType) { // Time
+                // format numbers like 9:14
+                statusText = `${left}:${right < 10 ? '0' + right : right}`;
+            } else { // Score/Moves
+                statusText = `Score: ${left} / Moves: ${right}`;
+            }
+            if (contactStatus) contactStatus.textContent = statusText;
+            if (contactStatus) contactStatus.textContent = statusText;
+        };
+
+        // Save: Store state to LocalStorage
+        jszm.save = function* (data) {
+            try {
+                // specific hack for large binary data in localstorage
+                const binary = String.fromCharCode.apply(null, data);
+                const base64 = btoa(binary);
+                localStorage.setItem('zork1-save', base64);
+
+                // Show success message
+                addMessage("💾 Game Saved Successfully", 'received');
+                justSaved = true; // Suppress next "Ok." message
+                return 1; // Return success to Z-Machine
+            } catch (e) {
+                console.error("Save failed", e);
+                addMessage("❌ Save Failed: " + e.message, 'received');
+                return 0; // Return failure
+            }
+        };
+
+        // Start script
+        runner = jszm.run();
+        runMachine(); // Start it up!
+
+    } catch (e) {
+        addMessage("Failed to initialize game: " + e.message, 'received');
+        console.error(e);
+    }
+};
+
+
+// Handle Mobile Keyboard / Viewport Resizes
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        scrollToBottom();
+        // Scroll window to top to prevent body scroll issues behind the virtual keyboard
+        window.scrollTo(0, 0);
+    });
+} else {
+    window.addEventListener('resize', scrollToBottom);
+}
+
+// Ensure input focus brings things into view
+commandInput.addEventListener('focus', () => {
+    setTimeout(scrollToBottom, 300); // Small delay for keyboard animation
+});
+
+init();
+
