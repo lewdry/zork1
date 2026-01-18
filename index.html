@@ -6,6 +6,13 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Zork: Mobile</title>
+
+    <!-- Apple PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Zork">
+    <meta name="theme-color" content="#1c1c1e">
+
     <link rel="stylesheet" href="style.css">
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -47,9 +54,15 @@
             <!-- Messages will be injected here -->
         </div>
 
+        <!-- Scroll to bottom FAB -->
+        <button class="scroll-fab hidden" id="scroll-fab" aria-label="Scroll to bottom">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+
         <div class="input-area">
             <form id="input-form">
-                <input type="text" id="command-input" placeholder="Message..." autocomplete="off">
+                <input type="text" id="command-input" placeholder="Message..." autocomplete="off" autocapitalize="none"
+                    autocorrect="off" spellcheck="false" inputmode="text">
                 <button type="submit" class="send-btn"><i class="fas fa-arrow-up"></i></button>
             </form>
         </div>

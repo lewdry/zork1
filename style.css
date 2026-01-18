@@ -18,13 +18,22 @@
     padding: 0;
 }
 
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+    /* Prevent body scroll - critical for iOS */
+    position: fixed;
+    /* Lock body in place on mobile */
+    width: 100%;
+}
+
 body {
     background-color: var(--bg-color);
     font-family: var(--font-ui);
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
     color: white;
 }
 
@@ -113,16 +122,29 @@ body {
     font-size: 18px;
 }
 
+.header-actions i {
+    touch-action: manipulation;
+    /* Eliminates tap delay on icons */
+    -webkit-tap-highlight-color: transparent;
+}
+
 /* Message Area */
 .message-area {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     background-color: #000;
     /* Chat background */
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scroll on iOS */
+    overscroll-behavior: contain;
+    /* Prevent scroll chaining */
+    min-height: 0;
+    /* Critical for flex children to shrink properly */
 }
 
 .date-divider {
@@ -192,6 +214,8 @@ body {
     align-items: center;
     gap: 12px;
     border-top: 1px solid #2c2c2e;
+    flex-shrink: 0;
+    /* Prevent input area from shrinking */
 }
 
 .attach-btn {
@@ -220,6 +244,8 @@ body {
     font-size: 16px;
     font-family: var(--font-ui);
     outline: none;
+    touch-action: manipulation;
+    /* Prevents zoom and tap delay */
 }
 
 .send-btn {
@@ -234,29 +260,80 @@ body {
     justify-content: center;
     font-size: 14px;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: transform 0.1s, background-color 0.1s;
+    touch-action: manipulation;
+    /* Eliminates 300ms tap delay */
+    -webkit-tap-highlight-color: transparent;
+    /* Remove iOS tap highlight */
 }
 
 .send-btn:active {
     transform: scale(0.9);
+    background-color: #7a3a9a;
+    /* Darker purple for touch feedback */
 }
 
+/* Scroll to Bottom FAB */
+.scroll-fab {
+    position: absolute;
+    bottom: 90px;
+    /* Above the input area */
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: rgba(44, 44, 46, 0.9);
+    border: 1px solid #3c3c3e;
+    color: #8e8e93;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 100;
+    transition: opacity 0.2s, transform 0.2s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
 
-/* ... existing desktop styles ... */
+.scroll-fab:active {
+    transform: scale(0.9);
+    background-color: rgba(60, 60, 62, 0.9);
+}
+
+.scroll-fab.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8);
+}
 
 /* Mobile Optimization */
 @media (max-width: 768px) {
+
+    html,
+    body {
+        position: fixed;
+        overflow: hidden;
+        height: 100%;
+        width: 100%;
+    }
+
     body {
         background-color: var(--bg-color);
         align-items: flex-start;
-        /* Align to top */
     }
 
     .phone-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         width: 100%;
         max-width: 100%;
-        height: 100dvh;
-        /* Use dynamic viewport height */
+        height: 100%;
+        /* Fill the visual viewport */
         max-height: none;
         border: none;
         border-radius: 0;
@@ -274,6 +351,7 @@ body {
         padding-top: max(10px, env(safe-area-inset-top));
         padding-left: max(16px, env(safe-area-inset-left));
         padding-right: max(16px, env(safe-area-inset-right));
+        flex-shrink: 0;
     }
 
     .message-area {
@@ -283,7 +361,7 @@ body {
 
     .input-area {
         /* Add padding for bottom safe area */
-        padding-bottom: max(20px, env(safe-area-inset-bottom));
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
         padding-left: max(16px, env(safe-area-inset-left));
         padding-right: max(16px, env(safe-area-inset-right));
     }

@@ -5,6 +5,7 @@ const inputForm = document.getElementById('input-form');
 const commandInput = document.getElementById('command-input');
 const statusTime = document.querySelector('.status-bar .time');
 const statusName = document.querySelector('.header-actions'); // Using for score/moves maybe?
+const scrollFab = document.getElementById('scroll-fab');
 
 // Update Clock
 function updateClock() {
@@ -26,6 +27,25 @@ let justSaved = false;
 // Helper to scroll to bottom
 function scrollToBottom() {
     messageArea.scrollTop = messageArea.scrollHeight;
+    updateScrollFab();
+}
+
+// Show/hide scroll FAB based on scroll position
+function updateScrollFab() {
+    if (!scrollFab) return;
+    const threshold = 100; // pixels from bottom
+    const isNearBottom = messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < threshold;
+    scrollFab.classList.toggle('hidden', isNearBottom);
+}
+
+// Listen for scroll to show/hide FAB
+messageArea.addEventListener('scroll', updateScrollFab);
+
+// FAB click scrolls to bottom
+if (scrollFab) {
+    scrollFab.addEventListener('click', () => {
+        messageArea.scrollTo({ top: messageArea.scrollHeight, behavior: 'smooth' });
+    });
 }
 
 // Helper to add a message to the UI
@@ -126,9 +146,17 @@ inputForm.addEventListener('submit', (e) => {
     const command = commandInput.value.trim();
     if (!command) return;
 
+    // Haptic feedback if supported
+    if ('vibrate' in navigator) {
+        navigator.vibrate(10);
+    }
+
     // Add user message immediately
     addMessage(command, 'sent');
     commandInput.value = '';
+
+    // Blur input to dismiss keyboard on submit (better iOS experience)
+    commandInput.blur();
 
     // Check for Restart Confirmation
     if (isWaitingForRestart) {
@@ -313,19 +341,59 @@ const init = async () => {
 
 
 // Handle Mobile Keyboard / Viewport Resizes
-if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', () => {
+const phoneContainer = document.querySelector('.phone-container');
+
+function handleViewportResize() {
+    if (window.visualViewport) {
+        const viewport = window.visualViewport;
+
+        // Resize container to match visual viewport (excludes keyboard)
+        phoneContainer.style.height = `${viewport.height}px`;
+
+        // Keep container at top of visual viewport
+        phoneContainer.style.top = `${viewport.offsetTop}px`;
+    }
+
+    // Prevent any body scroll that might have snuck in
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+
+    // Scroll chat to bottom with multiple attempts for iOS timing
+    requestAnimationFrame(() => {
         scrollToBottom();
-        // Scroll window to top to prevent body scroll issues behind the virtual keyboard
+        setTimeout(scrollToBottom, 100);
+        setTimeout(scrollToBottom, 300);
+    });
+}
+
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleViewportResize);
+    window.visualViewport.addEventListener('scroll', () => {
+        // Prevent visual viewport from scrolling (iOS does this sometimes)
         window.scrollTo(0, 0);
     });
 } else {
-    window.addEventListener('resize', scrollToBottom);
+    window.addEventListener('resize', handleViewportResize);
 }
 
 // Ensure input focus brings things into view
 commandInput.addEventListener('focus', () => {
-    setTimeout(scrollToBottom, 300); // Small delay for keyboard animation
+    // Multiple timeouts to catch different keyboard animation speeds
+    setTimeout(handleViewportResize, 100);
+    setTimeout(handleViewportResize, 300);
+    setTimeout(handleViewportResize, 500);
+});
+
+// Also handle blur to restore full height
+commandInput.addEventListener('blur', () => {
+    setTimeout(() => {
+        if (window.visualViewport) {
+            phoneContainer.style.height = '100%';
+            phoneContainer.style.top = '0';
+        }
+        scrollToBottom();
+    }, 100);
 });
 
 init();
