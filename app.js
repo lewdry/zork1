@@ -24,6 +24,15 @@ let textBuffer = "";
 let isWaitingForInput = false;
 let justSaved = false;
 
+// Basic mobile detection
+function isMobileDevice() {
+    return (
+        ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        (window.innerWidth <= 800)
+    );
+}
+
 // Helper to scroll to bottom
 function scrollToBottom() {
     messageArea.scrollTop = messageArea.scrollHeight;
@@ -155,8 +164,9 @@ inputForm.addEventListener('submit', (e) => {
     addMessage(command, 'sent');
     commandInput.value = '';
 
-    // Blur input to dismiss keyboard on submit (better iOS experience)
-    commandInput.blur();
+    // Keep focus on desktop, but allow blur on mobile if needed? 
+    // Actually, user explicitly asked for cursor to stay in the field.
+    commandInput.focus();
 
     // Check for Restart Confirmation
     if (isWaitingForRestart) {
@@ -395,6 +405,11 @@ commandInput.addEventListener('blur', () => {
         scrollToBottom();
     }, 100);
 });
+
+// Initial Focus for Desktop
+if (!isMobileDevice()) {
+    commandInput.focus();
+}
 
 init();
 
